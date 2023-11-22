@@ -1,11 +1,12 @@
 from cog import BasePredictor, Input, Path
-
 import json
 from faster_whisper import WhisperModel
 from faster_whisper.transcribe import Segment, Word, TranscriptionInfo
 import time
 from typing import Optional, List
 from faster_whisper.tokenizer import _LANGUAGE_CODES
+import math
+
 
 class Predictor(BasePredictor):
     use_flash_attention_2 = True
@@ -18,7 +19,7 @@ class Predictor(BasePredictor):
 
         # or run on GPU with INT8
         self.model = WhisperModel(model, device="cuda", compute_type="int8_float16")
-        
+
         # or run on CPU with INT8
         # model = WhisperModel(model, device="cpu", compute_type="int8")
 
@@ -30,35 +31,57 @@ class Predictor(BasePredictor):
             default="autodetect",
             choices=["autodetect"] + list(_LANGUAGE_CODES),
         ),
-        initial_prompt: str = Input(description="Initial prompt for decoder", default=""),
-        beam_size: int = Input(description="Beam size",default=5,),
+        initial_prompt: str = Input(
+            description="Initial prompt for decoder", default=""
+        ),
+        beam_size: int = Input(description="Beam size", default=5),
+        word_timestamps: bool = Input(description="Word timestamps", default=False),
         vad_filter: bool = Input(description="Apply VAD (Silero) toggle", default=True),
     ) -> str:
         t = time.time()
-        if language == 'autodetect':
+        if language == "autodetect":
             language = None
         segments, info = self.model.transcribe(
             str(audio),
             initial_prompt=initial_prompt if initial_prompt != "" else None,
-            language=language, 
+            language=language,
+            word_timestamps=word_timestamps,
             beam_size=beam_size,
             vad_filter=vad_filter,
-            )
-        payload = {"segments": [convert_segment(s) for s in segments], "info": convert_transcription_info(info)}
+        )
+        payload = {
+            "segments": [unpack(s) for s in segments],
+            "info": unpack(info),
+        }
         response = json.dumps(payload, ensure_ascii=False)
-        print(f'processing took {time.time() - t:0.2f}s for {audio}')
+        print(f"processing took {time.time() - t:0.2f}s for {audio}")
         return response
 
 
-def convert_segment(segment:Segment)->dict:
-    seg = segment._asdict()
-    words: Optional[List[Word]] = seg['words']
-    if words is not None:
-        seg['words'] = [word._asdict() for word in words]
-    return seg
+def isnamedtupleinstance(x):
+    _type = type(x)
+    bases = _type.__bases__
+    if len(bases) != 1 or bases[0] != tuple:
+        return False
+    fields = getattr(_type, "_fields", None)
+    if not isinstance(fields, tuple):
+        return False
+    return all(type(i) == str for i in fields)
 
-def convert_transcription_info(ti: TranscriptionInfo) -> dict :
-    ti = ti._asdict()
-    ti['transcription_options'] = ti['transcription_options']._asdict()
-    ti['vad_options'] = ti['vad_options']._asdict()
-    return ti
+
+def unpack(obj):
+    if isinstance(obj, dict):
+        return {key: unpack(value) for key, value in obj.items()}
+    elif isinstance(obj, list):
+        return [unpack(value) for value in obj]
+    elif isnamedtupleinstance(obj):
+        return {key: unpack(value) for key, value in obj._asdict().items()}
+    elif isinstance(obj, tuple):
+        return tuple(unpack(value) for value in obj)
+    elif isinstance(obj, float):
+        if math.isnan(obj) or math.isinf(obj):
+            return None
+        else:
+            return obj
+    else:
+        return obj
