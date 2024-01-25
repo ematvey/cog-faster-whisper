@@ -1,11 +1,10 @@
-from cog import BasePredictor, Input, Path
 import json
-from faster_whisper import WhisperModel
-from faster_whisper.transcribe import Segment, Word, TranscriptionInfo
-import time
-from typing import Optional, List
-from faster_whisper.tokenizer import _LANGUAGE_CODES
 import math
+import time
+
+from cog import BasePredictor, Input, Path
+from faster_whisper import WhisperModel
+from faster_whisper.tokenizer import _LANGUAGE_CODES
 
 
 class Predictor(BasePredictor):
