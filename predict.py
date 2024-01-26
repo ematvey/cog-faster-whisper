@@ -36,6 +36,10 @@ class Predictor(BasePredictor):
         beam_size: int = Input(description="Beam size", default=5),
         word_timestamps: bool = Input(description="Word timestamps", default=False),
         vad_filter: bool = Input(description="Apply VAD (Silero) toggle", default=True),
+        condition_on_previous_text: bool = Input(
+            description="If True, the previous output of the model is provided as a prompt for the next window; disabling may make the text inconsistent across windows, but the model becomes less prone to getting stuck in a failure loop, such as repetition looping or timestamps going out of sync.",
+            default=True,
+        ),
     ) -> str:
         t = time.time()
         if language == "autodetect":
@@ -47,6 +51,7 @@ class Predictor(BasePredictor):
             word_timestamps=word_timestamps,
             beam_size=beam_size,
             vad_filter=vad_filter,
+            condition_on_previous_text=condition_on_previous_text,
         )
         payload = {
             "segments": [unpack(s) for s in segments],
