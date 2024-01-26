@@ -1,3 +1,4 @@
+image: r8.im/ematvey/faster-whisper
 build:
   gpu: true
   system_packages:
